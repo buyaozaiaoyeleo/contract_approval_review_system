@@ -2,7 +2,7 @@
 
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -65,7 +65,7 @@ async def _serialize_risk_rows(db: AsyncSession, rows: list[dict], fallback_appr
                 "risk_id": row["risk_id"],
                 "approval_order_id": str(approval_order_id) if approval_order_id is not None else None,
                 "contract_file_name": contract_names.get(int(approval_order_id)) if approval_order_id is not None else None,
-                "rule_id": row["rule_id"],
+                "rule_id": row.get("rule_id"),
                 "risk_level": row["risk_level"],
                 "risk_description": row["risk_description"],
                 "suggestion": row.get("suggestion"),
@@ -365,20 +365,23 @@ async def get_risk_results_by_task(
 
 @router.get("/results", summary="List risk results")
 async def list_all_risk_results(
+    request: Request,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     approval_order_id: int | None = Query(None, description="按审批单 ID 筛选"),
-    risk_level: str | None = Query(None, alias="riskLevel", description="按风险等级筛选: HIGH/MEDIUM/LOW"),
-    keyword: str | None = Query(None, alias="keyword", description="搜索风险描述或原文"),
-    contract_file_name: str | None = Query(None, alias="contractFileName", description="按合同文件名筛选"),
+    risk_level: str | None = Query(None, description="按风险等级筛选 HIGH/MEDIUM/LOW"),
+    keyword: str | None = Query(None, description="搜索风险描述或原文"),
+    contract_file_name: str | None = Query(None, description="按原合同名称筛选"),
     db: AsyncSession = Depends(get_db),
     _auth: str = Depends(verify_api_key),
 ):
+    # 兼容历史 camelCase 查询参数，优先使用当前前端的 snake_case。
+    risk_level = risk_level or request.query_params.get("riskLevel")
+    keyword = keyword or request.query_params.get("keyword")
+    contract_file_name = contract_file_name or request.query_params.get("contractFileName")
+
     where_clauses = []
-    params: dict[str, object] = {
-        "offset": (page - 1) * page_size,
-        "limit": page_size,
-    }
+    params: dict[str, object] = {}
 
     if approval_order_id is not None:
         where_clauses.append("approval_order_id = :approval_order_id")
@@ -389,31 +392,31 @@ async def list_all_risk_results(
     if keyword:
         where_clauses.append("(risk_description LIKE :keyword OR source_text LIKE :keyword)")
         params["keyword"] = f"%{keyword}%"
-    if contract_file_name:
-        where_clauses.append(
-            "approval_order_id IN ("
-            "SELECT approval_order_id FROM t_contract_document WHERE file_name LIKE :contract_file_name"
-            ")"
-        )
-        params["contract_file_name"] = f"%{contract_file_name}%"
 
     where_sql = f" WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
-
-    count_query = text(f"SELECT COUNT(id) AS total FROM t_risk_review_result{where_sql}")
-    total_result = await db.execute(count_query, params)
-    total = int(total_result.scalar() or 0)
 
     rows = await _query_risk_rows(
         db,
         where_sql=where_sql,
         params=params,
-        limit_sql=" LIMIT :limit OFFSET :offset",
     )
     items = await _serialize_risk_rows(db, rows, fallback_approval_order_id=approval_order_id)
 
+    if contract_file_name:
+        contract_name_keyword = contract_file_name.strip().lower()
+        items = [
+            item
+            for item in items
+            if contract_name_keyword in (item.get("contract_file_name") or "").lower()
+        ]
+
+    total = len(items)
+    start = (page - 1) * page_size
+    end = start + page_size
+
     return ApiResponse.success(
         data={
-            "items": items,
+            "items": items[start:end],
             "total": total,
             "page": page,
             "page_size": page_size,

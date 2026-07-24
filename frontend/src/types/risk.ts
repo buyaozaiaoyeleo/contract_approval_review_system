@@ -31,4 +31,5 @@ export interface RiskQueryParams {
   approval_order_id?: string
   risk_level?: string
   keyword?: string
+  contract_file_name?: string
 }

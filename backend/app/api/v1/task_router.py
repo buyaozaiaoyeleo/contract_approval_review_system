@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -91,8 +91,8 @@ def _effective_duration_ms(task: WorkflowTask) -> int | None:
         try:
             started = task.started_at
             if started.tzinfo is None:
-                started = started.replace(tzinfo=datetime.UTC)
-            return int((datetime.now(datetime.UTC) - started).total_seconds() * 1000)
+                started = started.replace(tzinfo=timezone.utc)
+            return int((datetime.now(timezone.utc) - started).total_seconds() * 1000)
         except Exception:
             return None
     return None
