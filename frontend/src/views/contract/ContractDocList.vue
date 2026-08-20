@@ -114,6 +114,7 @@ import {
 import type { TableColumnsType, TablePaginationConfig } from 'ant-design-vue'
 import type { UploadChangeParam } from 'ant-design-vue'
 import PageHeader from '@/components/common/PageHeader.vue'
+import type { ContractDoc } from '@/types/contract'
 import { getContractDocs, uploadContract, deleteContractDoc, parseContractDoc, reviewContract, getContractDownloadUrl } from '@/api/contract'
 
 // 上传相关
@@ -128,7 +129,7 @@ const reviewingId = ref<string | null>(null)
 
 // 列表相关
 const loading = ref(false)
-const dataSource = ref<Record<string, unknown>[]>([])
+const dataSource = ref<ContractDoc[]>([])
 const pagination = reactive({
   current: 1,
   pageSize: 20,

@@ -190,99 +190,27 @@ class RiskReviewService:
 
     @staticmethod
     def _render_pdf_bytes(report_text: str) -> bytes:
-        page_width = 595
-        page_height = 842
-        margin_x = 50
-        top_y = 790
-        line_height = 18
-        max_chars_per_line = 28
-        max_lines_per_page = 38
+        """使用 fpdf2 + NotoSansCJK 中文字体生成 PDF 报告。"""
+        from fpdf import FPDF
 
-        wrapped_lines: list[str] = []
-        for raw_line in report_text.splitlines():
-            if not raw_line:
-                wrapped_lines.append("")
+        pdf = FPDF()
+        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.add_page()
+
+        # CentOS 7 上的 Noto 中文字体
+        font_path = "/usr/share/fonts/google-noto/NotoSansCJK-Regular.ttc"
+        pdf.add_font("CJK", "", font_path)
+        pdf.set_font("CJK", "", 11)
+
+        # 计算有效文本宽度，避免 "Not enough horizontal space" 报错
+        effective_width = pdf.w - pdf.l_margin - pdf.r_margin
+        for line in report_text.splitlines():
+            if not line:
+                pdf.ln(6)
                 continue
+            pdf.multi_cell(w=effective_width, h=6, text=line)
 
-            remaining = raw_line
-            while len(remaining) > max_chars_per_line:
-                wrapped_lines.append(remaining[:max_chars_per_line])
-                remaining = remaining[max_chars_per_line:]
-            wrapped_lines.append(remaining)
-
-        pages = [
-            wrapped_lines[index:index + max_lines_per_page]
-            for index in range(0, max(len(wrapped_lines), 1), max_lines_per_page)
-        ]
-        if not pages:
-            pages = [["合同风险审查报告"]]
-
-        objects: list[bytes] = []
-
-        def add_object(payload: str | bytes) -> int:
-            data = payload.encode("utf-8") if isinstance(payload, str) else payload
-            objects.append(data)
-            return len(objects)
-
-        add_object("<< /Type /Catalog /Pages 2 0 R >>")
-        add_object("__PAGES__")
-
-        font_object_id = 3 + len(pages) * 2
-        page_object_ids: list[int] = []
-
-        for page_lines in pages:
-            content_commands = ["BT", "/F1 11 Tf", f"1 0 0 1 {margin_x} {top_y} Tm"]
-            first_line = True
-            for line in page_lines:
-                if not first_line:
-                    content_commands.append(f"0 -{line_height} Td")
-                first_line = False
-                hex_text = line.encode("utf-16-be").hex().upper() if line else ""
-                content_commands.append(f"<{hex_text}> Tj")
-            content_commands.append("ET")
-            content_stream = "\n".join(content_commands).encode("utf-8")
-            content_object_id = add_object(
-                b"<< /Length " + str(len(content_stream)).encode("ascii") + b" >>\nstream\n" + content_stream + b"\nendstream"
-            )
-            page_object_id = add_object(
-                (
-                    f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {page_width} {page_height}] "
-                    f"/Resources << /Font << /F1 {font_object_id} 0 R >> >> /Contents {content_object_id} 0 R >>"
-                )
-            )
-            page_object_ids.append(page_object_id)
-
-        add_object(
-            "<< /Type /Font /Subtype /Type0 /BaseFont /STSong-Light /Encoding /UniGB-UCS2-H /DescendantFonts ["
-            "<< /Type /Font /Subtype /CIDFontType0 /BaseFont /STSong-Light "
-            "/CIDSystemInfo << /Registry (Adobe) /Ordering (GB1) /Supplement 4 >> >>] >>"
-        )
-
-        objects[1] = (
-            f"<< /Type /Pages /Count {len(page_object_ids)} /Kids [{' '.join(f'{page_id} 0 R' for page_id in page_object_ids)}] >>"
-        ).encode("utf-8")
-
-        buffer = BytesIO()
-        buffer.write(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
-        offsets = [0]
-        for index, obj in enumerate(objects, start=1):
-            offsets.append(buffer.tell())
-            buffer.write(f"{index} 0 obj\n".encode("ascii"))
-            buffer.write(obj)
-            buffer.write(b"\nendobj\n")
-
-        xref_offset = buffer.tell()
-        buffer.write(f"xref\n0 {len(objects) + 1}\n".encode("ascii"))
-        buffer.write(b"0000000000 65535 f \n")
-        for offset in offsets[1:]:
-            buffer.write(f"{offset:010d} 00000 n \n".encode("ascii"))
-        buffer.write(
-            (
-                f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n"
-                f"startxref\n{xref_offset}\n%%EOF"
-            ).encode("ascii")
-        )
-        return buffer.getvalue()
+        return pdf.output()
 
     def _build_summary(self, score: dict, high_risks: list, medium_risks: list, low_risks: list) -> str:
         level = score.get("overall_level", "NONE")

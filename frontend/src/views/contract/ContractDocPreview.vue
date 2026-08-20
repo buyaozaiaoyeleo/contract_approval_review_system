@@ -136,7 +136,7 @@ async function fetchDocDetail() {
   try {
     const res = await getContractDocDetail(docId)
     if (res.code === 0) {
-      const data = res.data as Record<string, unknown>
+      const data = res.data as unknown as Record<string, unknown>
       docInfo.file_name = String(data.file_name || '')
       docInfo.file_type = String(data.file_type || '')
       docInfo.file_size = Number(data.file_size || 0)

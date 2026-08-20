@@ -51,6 +51,6 @@ export function getRiskDistribution(): Promise<ApiResponse<DashboardStats['risk_
   return get<DashboardStats['risk_distribution']>('/v1/dashboard/risk-distribution')
 }
 
-export function getSystemLogs(params: { page: number; page_size: number; level?: string }): Promise<ApiResponse<PageResult<SystemLog>>> {
+export function getSystemLogs(params: { page: number; page_size: number; level?: string; module?: string }): Promise<ApiResponse<PageResult<SystemLog>>> {
   return get<PageResult<SystemLog>>('/v1/system/logs', params as unknown as Record<string, unknown>)
 }

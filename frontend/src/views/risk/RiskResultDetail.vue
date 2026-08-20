@@ -104,7 +104,7 @@ function getRiskLevelText(level?: string): string {
 async function fetchReport() {
   loading.value = true
   try {
-    const res = await getRiskReport(Number(approvalOrderId))
+    const res = await getRiskReport(approvalOrderId)
     if (res.code === 0) {
       report.value = res.data
     }

@@ -45,7 +45,7 @@
             {{ task?.completed_at || '-' }}
           </a-descriptions-item>
           <a-descriptions-item label="耗时">
-            {{ formatDuration(task?.duration_ms) }}
+            {{ formatDuration(task?.duration_ms ?? null) }}
           </a-descriptions-item>
           <a-descriptions-item label="错误信息" :span="3" v-if="task?.error_message">
             <a-alert

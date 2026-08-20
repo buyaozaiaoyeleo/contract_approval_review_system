@@ -8,6 +8,7 @@ export interface ContractDoc {
   parse_status: string
   is_scanned: boolean
   created_at: string | null
+  is_duplicate?: boolean
 }
 
 /** 合同文档详情（与后端 DocumentResponse 对齐） */
